@@ -1,35 +1,44 @@
 # Embedded Systems Lab Report
 
 <!-- Insert your details here -->
-* FirstName Lastname [ee23mt999@iitdh.ac.in] 
-* FirstName Lastname [ee23mt999@iitdh.ac.in]
-* Group: NN <br>
-* [Date]
+* Lokesh Kumar [ee23mt012@iitdh.ac.in] 
+* Devendra Singh [ee23mt004@iitdh.ac.in]
+* Group: 09
 
 ### Problem Statement:
 
-Insert the problem statement here, verbatim
+Generate a 50% duty cycle PWM waveform on TM4C123GH6PM, change the duty cycle of the signal on the press of on-board user switches
 
-### Solution Summary:
+### Procedure:
 
-A brief description (not more than 200 words) of how you have approached the problem, and how you have attempted to solve it.
+#### Task 1: 
+##### Create a PWM waveform with frequency = 100KHz and variable duty cycle.
 
-### Assumptions, Constraints and Requirements:
+The program should begin with d = 50%.
 
-Self explanatory. The problem statements are not exhaustive. Are there corner cases that your solution accounts for? Are there conditions that you ignore or default to?
+On pressing one switch the duty should be increased by 5% and on pressing other switch it should be decreased by 5%.
 
-### Block diagram / Flowchart:
+1. Enable System Clock as source to PWM Modules using RCC and RCGC registers.
+2. Enable clock and initialize GPIO Port F accordingly.
+3. Enable Interrupts on both the on-board switches.
+4. Enable the Alternate function on the desired pin, where the PWM signal will be generated, using AFSEL and PCTL registers.
+5. Disable/Turn off the PWM generator, Load the 'load' and 'compare' values in their respective registers, config the PWM genrator using the PWM_GENA(B) register, enable the the PWM generator and give the pwm signal to the desired pin.
+6.On the press of user switch 1(2) increase(decrease) the duty cycle, by modifying the compare value.
 
-Markdown allows you to embed an image file from your repo as a link, like this:
+#### Task 2:
+##### Implement the same but using only 1 switch (SW1 OR SW2) – short press for d increase and long press for decrease.
 
-![Duck](duck.png)
+1. Enable System Clock as source to PWM Modules using RCC and RCGC registers.
+2. Enable clock and initialize GPIO Port F accordingly.
+3. Enable Interrupts on both the on-board switches.
+4. Enable the Alternate function on the desired pin, where the PWM signal will be generated, using AFSEL and PCTL registers.
+5. Disable/Turn off the PWM generator, Load the 'load' and 'compare' values in their respective registers, config the PWM genrator using the PWM_GENA(B) register, enable the the PWM generator and give the pwm signal to the desired pin.
+6. On the falling edge, when the user switch is pressed, turn on the systick timer and load a reload value in 'STRELOAD' register corresponding to 0.5 sec of delay.
+7. On the rising edge, when the button is released, we check the 'COUNT_FLAG' of the systick timer, if set then we decrease the duty cycle, if not set then we increase the duty cycle of the pwm signal and turn of the systick timer.
 
-Alternatively, there are [many](https://asciiflow.com/#/) [tools](https://textik.com/#1c607fbeaad12321) [to create](https://metacpan.org/dist/App-Asciio/view/lib/App/Asciio.pm) ASCII Diagrams and more complicated [graphics with mermaid](https://github.blog/2022-02-14-include-diagrams-markdown-files-mermaid/).
+### Measurements:
 
-### Measurements and Results:
+With 16MHz clock given to PWM module, to generate a 100kHz signal, we need to wait for 16MHz/100kHz clock cycles. Therefore, the load value for the PWM module is set to be 160.
+To generate a PWM signal of 50 percent duty cycle, the compare value must be 160/2 = 80.
+When increasing(decreasing) the duty cycle by 5% we must decrement(increment) the compare value by 8 units.
 
-Oscilloscope waveforms, measurememtns, etc. go here.
-
-### Discussion and Conclusions:
-
-Did you get some unexpected behavior? Was there something that was not as expected? 
