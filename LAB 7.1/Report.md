@@ -66,3 +66,6 @@ With 16MHz clock given to PWM module, to generate a 100kHz signal, we need to wa
 To generate a PWM signal of 50 percent duty cycle, the compare value must be 160/2 = 80.
 When increasing(decreasing) the duty cycle by 5% we must decrement(increment) the compare value by 8 units.
 
+### Results
+![image](https://github.com/PEG-IITDH/lab-6-blinky-lokijii/assets/144203218/b4cff58a-49ab-44f3-b227-32a200a5d6ac)
+![image](https://github.com/PEG-IITDH/lab-6-blinky-lokijii/assets/144203218/4d9e3a6e-53ef-4f7e-af1f-8ac964de988d)
