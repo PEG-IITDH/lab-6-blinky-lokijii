@@ -2,98 +2,82 @@
 #include <stdbool.h>
 #include "tm4c123gh6pm.h"
 
-//Using M1PWM6, on Pin PF2; controlled by M1PWM6, controlled by Module 1 PWM Generator 3.
+#define MASK_BITS 0x11                  // Bit mask for user switches SW1 and SW2
 
-void PortFConfig(void);
-void PWMConfig(void);
-void two_switch(void);
-//void GPIOF_Handler(void);
-
-#define frequency 100000
-#define time_period (16000000/frequency)
-#define del_duty 5
-volatile int duty;
-
-#define Sw_Bits 0x11
-
+void GPIOF_config(void);
+void GPIOF_Interrupt_config(void);
 
 void main(void)
-
 {
-    PortFConfig();
-    PWMConfig();
-    duty=50;
-    PWM1_3_CMPA_R = (time_period * duty) / 100;     //Provide initial duty to pwm
-    while(1){}
+    SYSCTL_RCC_R &= ~(1 << 20);        // Disable the system clock as the source for PWM (16MHz)
+    SYSCTL_RCGC0_R |= 0x00100000;     // Enable the clock for the PWM module
+    SYSCTL_RCGCPWM_R = 0x3;           // Enable clock for PWM modules 1
+
+    GPIOF_config();                   // Configure GPIO for use
+    GPIOF_Interrupt_config();         // Configure GPIO interrupts
+    GPIO_PORTF_AFSEL_R |= 0x02;       // Enable alternate function on PF1 (PWM signal)
+    GPIO_PORTF_PCTL_R |= 0x50;        // Set M1PWM5 function on PF1
+
+    PWM1_2_CTL_R = 0x00000000;        // Disable PWM module 1, generator 2
+    PWM1_2_GENB_R |= 0x80E;           // Configure PWM module 1, generator 2, signal B: invert on compare B down count, high on load, low on zero
+    PWM1_2_LOAD_R = 160;              // Set the load value for a 100kHz signal
+    PWM1_2_CMPB_R = 80;              // Set the compare value for a 50% duty cycle
+    PWM1_2_CTL_R |= 0x01;             // Enable the PWM block
+    PWM1_ENABLE_R |= (1 << 5);       // Enable M1PWM5 signal on the pin
+
+    /* Perform some operations */
+    while (1);
 }
 
-void PortFConfig(void)
+void GPIOF_config()
 {
-    SYSCTL_RCGCGPIO_R |= (1<<5);        //Enable and provide a clock to GPIO Port F
-    GPIO_PORTF_LOCK_R = 0x4C4F434B;     //Unlock PortF register
-    GPIO_PORTF_CR_R = 0x1F;             //Enable Commit function
-
-    GPIO_PORTF_PUR_R = 0x11;            //Pull-up for user switches
-    GPIO_PORTF_DEN_R = 0x1F;            //Enable all pins on port F
-    GPIO_PORTF_DIR_R = 0x0E;            //Define PortF LEDs as output and switches as input
-
-    //PortF Interrupt Configurations: User Sw should trigger hardware interrupt
-    GPIO_PORTF_IS_R &= ~Sw_Bits;        //Edge trigger detected
-    GPIO_PORTF_IBE_R &= ~Sw_Bits;       //Trigger interrupt according to GPIOIEV
-    GPIO_PORTF_IEV_R &= ~Sw_Bits;       //Trigger interrupt on falling edge
-    GPIO_PORTF_IM_R &= ~Sw_Bits;        //Mask interrupt bits
-    GPIO_PORTF_ICR_R |= Sw_Bits;        //clear any prior interrupts
-    GPIO_PORTF_IM_R |= Sw_Bits;         //enable interrupts for bits corresponding to Mask_Bits
-
-    //NVIC Configuration
-    //PortF interrupts correspond to interrupt 30 (EN0 and PRI7 registers)
-    NVIC_EN0_R |= (1<<30);              //Interrupts enabled for port F
-    NVIC_PRI7_R &= 0xFF3FFFFF;          //Interrupt Priority 1 to Port F
+    SYSCTL_RCGC2_R |= 0x20;           // Enable clock for port F
+    GPIO_PORTF_LOCK_R = 0x4C4F434B;   // Unlock commit register
+    GPIO_PORTF_CR_R = 0x1F;           // Make PORTF0 configurable
+    GPIO_PORTF_DEN_R = 0x1F;          // Enable digital I/O on all PF pins
+    GPIO_PORTF_DIR_R = 0x0E;          // Set PF0 and PF4 as input, PF1-PF3 as output
+    GPIO_PORTF_PUR_R = 0x11;          // Enable pull-up resistor on PF0 and PF4
 }
 
-void PWMConfig(void)
+void GPIOF_Interrupt_config()
 {
-    SYSCTL_RCGCPWM_R |= (1<<1);     //Enable and provide a clock to PWM module 1
-    GPIO_PORTF_AFSEL_R |= (1<<2);   //Enable Alternate function for PF2
-    GPIO_PORTF_PCTL_R |= 0x500;     //Selecting PWM function for PF2 (Page 1351)
-
-    PWM1_3_CTL_R |= 0x00;
-    PWM1_3_GENA_R = 0x8C;          //Configure PWM Gen A such that PWMA is High when counter=LOAD and low when counter=CMPA when counting down
-    PWM1_3_LOAD_R = time_period;
-    PWM1_3_CMPA_R = (duty/100)*time_period - 1;
-    PWM1_3_CTL_R |= 0x01;
-    PWM1_ENABLE_R |= 0x040;
+    GPIO_PORTF_IM_R &= ~MASK_BITS;    // Mask interrupts for SW1 and SW2
+    GPIO_PORTF_IS_R &= ~MASK_BITS;    // Configure edge-sensitive interrupts
+    GPIO_PORTF_IEV_R &= ~MASK_BITS;   // Configure falling edge to trigger the interrupt
+    GPIO_PORTF_IBE_R &= ~MASK_BITS;   // Configure interrupt control using GPIOIEV
+    NVIC_PRI7_R = (NVIC_PRI7_R & 0xFF1FFFFF) | (2 << 21);  // Set priority of interrupt 30 (Port F) to 2
+    NVIC_EN0_R |= (1 << 30);          // Enable interrupt on Port F
+    GPIO_PORTF_ICR_R = MASK_BITS;     // Clear Raw Interrupt Status (RIS) and Masked Interrupt Status (MIS) for edge-sensitive interrupt
+    GPIO_PORTF_IM_R |= MASK_BITS;     // Unmask interrupts for SW1 and SW2
 }
 
-void GPIOF_Handler(void)
+void GPIOF_INT_Handler(void)
 {
-    two_switch();
-
-    int j;
-    for(j = 0; j <1600*1000/4; j++){}           //Debounce Delay of 0.25seconds
-
-    GPIO_PORTF_ICR_R = Sw_Bits;
-    GPIO_PORTF_IM_R |= Sw_Bits;
-}
-
-void two_switch(void)
-{
-    GPIO_PORTF_IM_R &= ~Sw_Bits;
-
-        if(GPIO_PORTF_RIS_R & 0x10)    //Usr Sw 1
+    GPIO_PORTF_IM_R &= ~MASK_BITS;    // Mask interrupts for SW1 and SW2
+    int i;
+    if (GPIO_PORTF_RIS_R & 0x01)     // Check if the interrupt is caused by SW2
+    {
+        for (i = 0; i < 160000; i++) {}  // Implement a delay for debouncing
+        if (~(GPIO_PORTF_DATA_R) & 0x01)  // If the input on SW2 is 0 (pressed), decrease the duty cycle (implemented for debouncing)
         {
-            if (duty < 95)
-                   {
-                       duty = duty + del_duty;
-                   }
+            if (PWM1_2_CMPB_R < 152)
+            {
+                PWM1_2_CMPB_R -= 8;  // Decrease the duty cycle by 5%
+            }
         }
-        else if (GPIO_PORTF_RIS_R & 0x01)    //Usr Sw 2
-        {
-            if (duty > 5)
-                   {
-                       duty = duty - del_duty;
-                   }
-        }
-        PWM1_3_CMPA_R = (time_period * duty) / 100;
-}
+    }
 
+    if (GPIO_PORTF_RIS_R & 0x10)      // Check if the interrupt is caused by SW1
+    {
+        for (i = 0; i < 160000; i++) {}  // Implement a delay for debouncing
+        if (~(GPIO_PORTF_DATA_R) & 0x10)  // If the input on SW1 is 0 (pressed), increase the duty cycle (implemented for debouncing)
+        {
+            if (PWM1_2_CMPB_R > 8)
+            {
+                PWM1_2_CMPB_R += 8;  // Increase the duty cycle by 5%
+            }
+        }
+    }
+    GPIO_PORTF_ICR_R = MASK_BITS;     // Clear the interrupt for Port F
+    GPIO_PORTF_IM_R |= MASK_BITS;     // Unmask interrupts for SW1 and SW2
+}
